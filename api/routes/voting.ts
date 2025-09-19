@@ -52,7 +52,7 @@ router.get('/', (req, res) => {
  */
 router.post('/register', async (req, res) => {
   try {
-    const { voterId, publicKey, registrationData } = req.body as VoterRegistration;
+    const { voterId, publicKey, registrationData } = req.body;
     
     if (!voterId || !publicKey) {
       return res.status(400).json({
@@ -80,6 +80,7 @@ router.post('/register', async (req, res) => {
       });
     }
   } catch (error) {
+    console.error('Registration error:', error);
     res.status(500).json({
       success: false,
       error: 'Registration failed'

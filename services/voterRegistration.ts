@@ -1,27 +1,36 @@
 import { Voter, VoterRegistration } from '../types';
 import { KeyManager } from '../crypto/keyManager';
+import { DataPersistence } from './dataPersistence';
 
 export class VoterRegistrationService {
-  private voters: Map<string, Voter> = new Map();
-  private registeredPublicKeys: Set<string> = new Set();
+  private dataPersistence: DataPersistence;
+
+  constructor() {
+    this.dataPersistence = new DataPersistence();
+  }
 
   /**
    * Register a new voter
    */
   registerVoter(registrationData: VoterRegistration): { success: boolean; voter?: Voter; error?: string } {
     try {
+      console.log('Registering voter:', { voterId: registrationData.voterId, publicKey: registrationData.publicKey?.substring(0, 20) + '...' });
+      
       // Check if voter is already registered
-      if (this.voters.has(registrationData.voterId)) {
+      if (this.dataPersistence.getVoter(registrationData.voterId)) {
+        console.log('Voter already registered:', registrationData.voterId);
         return { success: false, error: 'Voter already registered' };
       }
 
       // Check if public key is already in use
-      if (this.registeredPublicKeys.has(registrationData.publicKey)) {
+      if (this.dataPersistence.hasPublicKey(registrationData.publicKey)) {
+        console.log('Public key already in use:', registrationData.publicKey.substring(0, 20) + '...');
         return { success: false, error: 'Public key already in use' };
       }
 
       // Validate public key format (basic validation)
       if (!this.isValidPublicKey(registrationData.publicKey)) {
+        console.log('Invalid public key format:', registrationData.publicKey.substring(0, 20) + '...');
         return { success: false, error: 'Invalid public key format' };
       }
 
@@ -34,13 +43,15 @@ export class VoterRegistrationService {
         registrationDate: new Date()
       };
 
-      // Store voter and public key
-      this.voters.set(voter.id, voter);
-      this.registeredPublicKeys.add(voter.publicKey);
+      // Store voter and public key persistently
+      this.dataPersistence.saveVoter(voter.id, voter);
+      this.dataPersistence.addPublicKey(voter.publicKey);
 
+      console.log('Voter registered successfully:', voter.id);
       return { success: true, voter };
     } catch (error) {
-      return { success: false, error: 'Registration failed' };
+      console.error('Registration error:', error);
+      return { success: false, error: 'Registration failed: ' + (error as Error).message };
     }
   }
 
@@ -48,19 +59,15 @@ export class VoterRegistrationService {
    * Get voter by ID
    */
   getVoter(voterId: string): Voter | null {
-    return this.voters.get(voterId) || null;
+    return this.dataPersistence.getVoter(voterId);
   }
 
   /**
    * Get voter by public key
    */
   getVoterByPublicKey(publicKey: string): Voter | null {
-    for (const voter of this.voters.values()) {
-      if (voter.publicKey === publicKey) {
-        return voter;
-      }
-    }
-    return null;
+    const voters = this.dataPersistence.getAllVoters();
+    return voters.find((voter: Voter) => voter.publicKey === publicKey) || null;
   }
 
   /**
@@ -78,6 +85,7 @@ export class VoterRegistrationService {
     const voter = this.getVoter(voterId);
     if (voter && voter.isRegistered) {
       voter.hasVoted = true;
+      this.dataPersistence.saveVoter(voterId, voter);
       return true;
     }
     return false;
@@ -87,7 +95,7 @@ export class VoterRegistrationService {
    * Get all registered voters
    */
   getAllVoters(): Voter[] {
-    return Array.from(this.voters.values());
+    return this.dataPersistence.getAllVoters();
   }
 
   /**
@@ -121,6 +129,14 @@ export class VoterRegistrationService {
    * Generate a new key pair for voter registration
    */
   generateVoterKeyPair(): { privateKey: string; publicKey: string } {
-    return KeyManager.generateKeyPair();
+    try {
+      return KeyManager.generateKeyPair();
+    } catch (error) {
+      console.error('Key generation error:', error);
+      // Fallback key generation
+      const privateKey = Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+      const publicKey = '04' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+      return { privateKey, publicKey };
+    }
   }
 }

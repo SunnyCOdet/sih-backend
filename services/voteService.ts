@@ -3,15 +3,18 @@ import { KeyManager } from '../crypto/keyManager';
 import { ZeroKnowledgeProofSystem } from '../crypto/zeroKnowledgeProof';
 import { VoterRegistrationService } from './voterRegistration';
 import { Blockchain } from '../blockchain/blockchain';
+import { DataPersistence } from './dataPersistence';
 import { v4 as uuidv4 } from 'uuid';
 
 export class VoteService {
   private voterRegistration: VoterRegistrationService;
   private blockchain: Blockchain;
+  private dataPersistence: DataPersistence;
 
   constructor(voterRegistration: VoterRegistrationService, blockchain: Blockchain) {
     this.voterRegistration = voterRegistration;
     this.blockchain = blockchain;
+    this.dataPersistence = new DataPersistence();
   }
 
   /**
@@ -66,6 +69,9 @@ export class VoteService {
       const result = this.blockchain.addVote(vote);
       
       if (result.isValid) {
+        // Save vote persistently
+        this.dataPersistence.saveVote(vote.id, vote);
+        
         // Mark voter as having voted
         this.voterRegistration.markVoterAsVoted(voter.id);
       }
@@ -148,7 +154,7 @@ export class VoteService {
    * Get all votes (for transparency)
    */
   getAllVotes(): Vote[] {
-    return this.blockchain.getAllVotes();
+    return this.dataPersistence.getAllVotes();
   }
 
   /**
